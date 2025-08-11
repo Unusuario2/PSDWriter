@@ -5,14 +5,15 @@
 // $NoKeywords: $
 //=============================================================================//
 #include <windows.h>
-#include "tier1/strtools.h"
-#include "tier0/icommandline.h"
-#include "tools_minidump.h"
-#include "loadcmdline.h"
-#include "cmdlib.h"
-#include "filesystem_init.h"
-#include "filesystem_tools.h"
-#include "color.h"
+#include <tier1/strtools.h>
+#include <tier0/icommandline.h>
+#include <tools_minidump.h>
+#include <loadcmdline.h>
+#include <cmdlib.h>
+#include <filesystem_init.h>
+#include <filesystem_tools.h>
+#include <color.h>
+#include <colorschemetools.h>
 #include "psdwriter.h"
 #include "psdmain.h"
 
@@ -29,9 +30,6 @@ bool            g_bDeleteSource = false;
 float           g_fGlobalTimer;
 uint8_t         g_uiCompressionType = 0;
 uint8_t         g_uiForceImageBit;
-Color			header_color(0, 255, 255, 255);     //TODO: maybe move 'Color' in utils/common/colorscheme.cpp/.h
-Color			successful_color(0, 255, 0, 255);
-Color			failed(255, 0, 0, 255);
 char			g_szGameMaterialSrcDir[MAX_PATH] = ""; 
 char			g_szSingleInputFile[MAX_PATH] = "";
 char            g_szSignature[1][128];
@@ -83,7 +81,7 @@ static void ProcessDirAndConvertContents(const char* directory, int &files)
     WIN32_FIND_DATAA findData;
     HANDLE hFind;
 
-    V_snprintf(searchPath, MAX_PATH, "%s\\*.*", directory);
+    V_snprintf(searchPath, sizeof(searchPath), "%s\\*.*", directory);
 
     hFind = FindFirstFileA(searchPath, &findData);
 
@@ -133,6 +131,16 @@ static void Init()
 {
     g_fGlobalTimer = Plat_FloatTime();
 
+    CSysModule* pFileSystem = Sys_LoadModule("filesystem_stdio.dll");
+    if (!pFileSystem)
+        Error("Failed to load filesystem_stdio.dll!\n");
+
+    CreateInterfaceFn factory = Sys_GetFactory(pFileSystem);
+    if (!factory)
+        Error("Failed to create filesystem_stdio.dll interface!\n");
+
+    g_pFileSystem = (IFileSystem*)factory(FILESYSTEM_INTERFACE_VERSION, NULL);
+
     if (!g_bIsSingleFile && !g_bUseDir)
     {
         V_snprintf(g_szGameMaterialSrcDir, sizeof(g_szGameMaterialSrcDir), "%s\\%s", gamedir, MATERIALSRC_DIR);
@@ -148,7 +156,7 @@ static void Init()
 //-----------------------------------------------------------------------------
 static void PrintHeader()
 {
-	ColorSpewMessage(SPEW_MESSAGE, &header_color, "Unusuario2 - psdwriter.exe (Build: %s %s)\n", __DATE__, __TIME__);
+	ColorSpewMessage(SPEW_MESSAGE, &ColorHeader, "Unusuario2 - psdwriter.exe (Build: %s %s)\n", __DATE__, __TIME__);
 }
 
 
@@ -158,7 +166,7 @@ static void PrintHeader()
 static void PrintUsage(int argc, char* argv[])
 {
     Msg("Usage: psdwriter.exe [options] -i or -game <path>\n\n");
-    ColorSpewMessage(SPEW_MESSAGE, &header_color, " General Options:\n");
+    ColorSpewMessage(SPEW_MESSAGE, &ColorHeader, " General Options:\n");
     Msg("   -i <file>:                      Path to the file to convert (e.g: \"C:\\dota 2\\materialsrc\\default\\default_color.tga\").\n"
         "   -dir <path>:                    Converts all the files in the dir.\n"
         "   -psdtemplategeneration or -psdtg: For every file that has a end name, like _normal or _color for example it adds the config vtex file.\n"
@@ -167,11 +175,11 @@ static void PrintUsage(int argc, char* argv[])
 		"   -game <path>:                   Specify the folder of the gameinfo.txt file. Makes the tool look in the folder materialsrc for files to convert.\n"
         "   -vproject <path>:               Same as \'-game\'.\n"
         "\n");
-    ColorSpewMessage(SPEW_MESSAGE, &header_color, " Spew Options:\n");
+    ColorSpewMessage(SPEW_MESSAGE, &ColorHeader, " Spew Options:\n");
     Msg("   -v or -verbose:                 Enables verbose.\n"
         "   -quiet:                         Prints minimal text. (Note: Disables \'-verbose\').\n"
         "\n");
-    ColorSpewMessage(SPEW_MESSAGE, &header_color, " Other Options:\n");
+    ColorSpewMessage(SPEW_MESSAGE, &ColorHeader, " Other Options:\n");
     Msg("   -FullMinidumps:                 Write large minidumps on crash.\n"
         "   -psdcompresion <n>:             Manages the compresion of the .psd file when importing a image (default 0).\n"
         "                                   0 = Raw data (big filesize)\n"
@@ -341,9 +349,9 @@ int main(int argc, char* argv[])
     }
     else 
     {
-        int files = 0;
-        ProcessDirAndConvertContents(g_szGameMaterialSrcDir, files);
-        Msg("Converted image files to .psd: %i\n\n", files);
+        int iFiles = 0;
+        ProcessDirAndConvertContents(g_szGameMaterialSrcDir, iFiles);
+        Msg("Converted image files to .psd: %i\n\n", iFiles);
     }
 
 	DeleteCmdLine(argc, argv);
@@ -351,3 +359,4 @@ int main(int argc, char* argv[])
 	CmdLib_Exit(1);
 	return 0;
 }
+

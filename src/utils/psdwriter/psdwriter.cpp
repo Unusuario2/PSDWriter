@@ -7,15 +7,16 @@
 #include <io.h>
 #include <cstddef>
 #include <vector>
-#include <windows.h>
-#include "tier1/strtools.h"
-#include "tier0/icommandline.h"
-#include "tools_minidump.h"
-#include "loadcmdline.h"
-#include "cmdlib.h" 
-#include "filesystem_init.h" 
-#include "filesystem_tools.h" 
-#include "color.h" 
+#include <tier1/strtools.h>
+#include <tier0/icommandline.h>
+#include <tools_minidump.h>
+#include <loadcmdline.h>
+#include <cmdlib.h>
+#include <filesystem_init.h>
+#include <filesystem_tools.h>
+#include <utlbuffer.h>
+#include <color.h> 
+#include <colorschemetools.h>
 #include "psdwriter.h"
 #include "psdmain.h"
 
@@ -60,7 +61,7 @@ Note:
 
 
 //-----------------------------------------------------------------------------
-// Purpose: internal global vars, helpers for writing .psd files
+// Purpose: helpers for writing .psd files
 //-----------------------------------------------------------------------------
 int			g_iImageWidth;
 int			g_iImageHeight;
@@ -118,10 +119,13 @@ static void GenerateVtexConfigFile(const char* pFileName)
 	}
 
 	float start = Plat_FloatTime();
-	char* pPsdFile = V_strdup(pFileName);
-	V_StripExtension(pPsdFile, pPsdFile, V_strlen(pPsdFile));
-	Msg("Generating config file for: %s.psd... ", pPsdFile);
-	delete[] pPsdFile;
+
+	{
+		char* pPsdFile = V_strdup(pFileName);
+		V_StripExtension(pPsdFile, pPsdFile, V_strlen(pPsdFile));
+		Msg("Generating config file for: %s.psd... ", pPsdFile);
+		delete[] pPsdFile;
+	}
 
 	// Sanity check!
 	if (gamedir[0] == '\0')
@@ -161,9 +165,9 @@ static void GenerateVtexConfigFile(const char* pFileName)
 	if (!bEndFileName)
 	{
 		Warning("\n"
-			"File: %s does not have a valid end-name.\n"
-			"Template config compile settings will not be applied!\n",
-			pImageFileName);
+				"File: %s does not have a valid end-name.\n"
+				"Template config compile settings will not be applied!\n",
+				pImageFileName);
 		return;
 	}
 
@@ -185,27 +189,33 @@ static void GenerateVtexConfigFile(const char* pFileName)
 	{
 		Warning("\n"
 				"Could not find a template config file in: %s\n"
-				"Config file: %s\n"
-				, g_szGameMaterialSrcDir, szSrcTemplateConfigFile
+				"Config file: %s\n", 
+				g_szGameMaterialSrcDir, 
+				szSrcTemplateConfigFile
 		);
 	}
 	else
 	{
 		// Copy the config file to the .psd dir!
-		if (CopyFileA(szSrcTemplateConfigFile, pImageFileConfig, FALSE))
+		CUtlBuffer utlbuffer;
+		if (!g_pFileSystem->ReadFile(szSrcTemplateConfigFile, NULL, utlbuffer)) 
 		{
-			Msg("done(%.2fs)\n", Plat_FloatTime() - start);
+			Warning("Failed to read template file: %s\n"
+					"Skipping vtex template generation!\n", szSrcTemplateConfigFile);
+			
+			delete[] pImageFileConfig;
+			return;
 		}
-		else
+		if(!g_pFileSystem->WriteFile(pImageFileConfig, NULL, utlbuffer))
 		{
-			DWORD errorCode = GetLastError();
-			Warning("\n"
-					"Could not generate the config file for the .psd file!\n"
-					"Config file: %s\n"
-					"CopyFileA(); Error code : % lu\n",
-					errorCode, szSrcTemplateConfigFile
-			);
+			Warning("Failed to write template file: %s\n"
+					"Skipping vtex template generation!\n", pImageFileConfig);
+
+			delete[] pImageFileConfig;
+			return;
 		}
+		
+		Msg("done(%.2fs)\n", Plat_FloatTime() - start);
 	}
 
 	delete[] pImageFileConfig;
@@ -222,15 +232,16 @@ static bool IsPsdOK(const char* pFileName)
 
 	if (_access(szFile, 0))
 	{
-		ColorSpewMessage(SPEW_MESSAGE, &failed, "FAILED - %s\n", szFile);
+		ColorSpewMessage(SPEW_MESSAGE, &ColorUnSucesfull, "FAILED - %s\n", szFile);
 		return true;
 	}
 	else
 	{
-		ColorSpewMessage(SPEW_MESSAGE, &successful_color, "OK"); Msg(" - %s (%.2fs)\n", szFile, Plat_FloatTime() - g_fGlobalTimer);
+		ColorSpewMessage(SPEW_MESSAGE, &ColorSucesfull, "OK"); Msg(" - %s (%.2fs)\n", szFile, Plat_FloatTime() - g_fGlobalTimer);
 		return false;
 	}
 }
+
 
 //-----------------------------------------------------------------------------
 // Purpose: Add metadata to the .psd file
