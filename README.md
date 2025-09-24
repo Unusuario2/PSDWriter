@@ -6,7 +6,7 @@
 
 ---
 
-## 📦 Installation
+## Installation
 
 To install **PSDWriter**, follow these steps:
 
@@ -19,16 +19,16 @@ To install **PSDWriter**, follow these steps:
 
 ---
 
-## 📄 License
+## License
 
 This repository contains various pieces of original source code licensed under the **MIT License**, except for bundled third-party libraries such as [`stb`](https://github.com/nothings/stb) and [`psd_sdk`](https://github.com/MolecularMatters/psd_sdk), which retain their own licenses.
 
 ---
 
-## Contact
+## Contact  
 
-Steam: https://steamcommunity.com/profiles/76561199073832016/  
-Twitter: https://x.com/47Z14  
-Discord: carlossuarez7285  
+- **Steam**: [Profile Link](https://steamcommunity.com/profiles/76561199073832016/)  
+- **Twitter/X**: [@47Z14](https://x.com/47Z14)  
+- **Discord**: `carlossuarez7285`  
 
 ---
