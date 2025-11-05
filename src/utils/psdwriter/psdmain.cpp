@@ -21,14 +21,15 @@
 //-----------------------------------------------------------------------------
 // Purpose: Global vars
 //-----------------------------------------------------------------------------
-bool			g_bQuiet = false;
-bool            g_bSignature = false;
-bool            g_bIsSingleFile = true;
-bool            g_bUseDir = false;
-bool            g_bTemplateGeneration = false;
-bool            g_bDeleteSource = false;
-float           g_fGlobalTimer;
-uint8_t         g_uiCompressionType = 0;
+bool			g_bQuiet                = false;
+bool            g_bSignature            = false;
+bool            g_bIsSingleFile         = true;
+bool            g_bUseDir               = false;
+bool            g_bTemplateGeneration   = false;
+bool            g_bDeleteSource         = false;
+bool            g_bDontForce8BitsPsd    = false;
+float           g_fGlobalTimer          = 0;
+uint8_t         g_uiCompressionType     = 0;
 uint8_t         g_uiForceImageBit;
 char			g_szGameMaterialSrcDir[MAX_PATH] = ""; 
 char			g_szSingleInputFile[MAX_PATH] = "";
@@ -77,11 +78,10 @@ const char*     g_rgpEndFileName[G_RGPENDFILENAMESIZE] =
 static void ProcessDirAndConvertContents(const char* directory, int &files)
 {
     char searchPath[MAX_PATH];
-    bool bFoundFile = false;
     WIN32_FIND_DATAA findData;
     HANDLE hFind;
 
-    V_snprintf(searchPath, sizeof(searchPath), "%s\\*.*", directory);
+    V_sprintf_safe(searchPath, "%s\\*.*", directory);
 
     hFind = FindFirstFileA(searchPath, &findData);
 
@@ -100,7 +100,7 @@ static void ProcessDirAndConvertContents(const char* directory, int &files)
 
         // Build full path
         char fullPath[MAX_PATH];
-        V_snprintf(fullPath, MAX_PATH, "%s\\%s", directory, name);
+        V_sprintf_safe(fullPath, "%s\\%s", directory, name);
 
         if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
         {
@@ -142,9 +142,7 @@ static void Init()
     g_pFileSystem = (IFileSystem*)factory(FILESYSTEM_INTERFACE_VERSION, NULL);
 
     if (!g_bIsSingleFile && !g_bUseDir)
-    {
-        V_snprintf(g_szGameMaterialSrcDir, sizeof(g_szGameMaterialSrcDir), "%s\\%s", gamedir, MATERIALSRC_DIR);
-    }
+        V_sprintf_safe(g_szGameMaterialSrcDir, "%s\\%s", gamedir, MATERIALSRC_DIR);
 
     qprintf("Gamedir path:          %s\n", gamedir);
     qprintf("Material Source path:  %s\n", g_szGameMaterialSrcDir);
@@ -180,7 +178,8 @@ static void PrintUsage(int argc, char* argv[])
         "   -quiet:                         Prints minimal text. (Note: Disables \'-verbose\').\n"
         "\n");
     ColorSpewMessage(SPEW_MESSAGE, &ColorHeader, " Other Options:\n");
-    Msg("   -FullMinidumps:                 Write large minidumps on crash.\n"
+    Msg("   -dontforce8bitspsd:             DOnt clamp the .psd files to 8bits rgb value. (In some of source engine branches enabling this option will cause vtex.exe to fail).\n"
+        "   -FullMinidumps:                 Write large minidumps on crash.\n"
         "   -psdcompresion <n>:             Manages the compresion of the .psd file when importing a image (default 0).\n"
         "                                   0 = Raw data (big filesize)\n"
         "                                   1 = RLE-compressed data (using the PackBits algorithm).\n"
@@ -200,11 +199,8 @@ static void PrintUsage(int argc, char* argv[])
 //-----------------------------------------------------------------------------
 static void ParseCommandline(int argc, char* argv[])
 {
-    int x = 0;
     if (argc == 1)
-    {
         PrintUsage(argc, argv);
-    }
 
     for (int i = 1; i < argc; ++i)
     {
@@ -222,6 +218,10 @@ static void ParseCommandline(int argc, char* argv[])
 			verbose	 = false;
             g_bQuiet = true;
         }
+        else if (!V_stricmp(argv[i], "-dontforce8bitspsd"))
+        {
+            g_bDontForce8BitsPsd = true;
+        }
         else if (!V_stricmp(argv[i], "-FullMinidumps"))
         {
 			EnableFullMinidumps(true);
@@ -236,7 +236,7 @@ static void ParseCommandline(int argc, char* argv[])
 		}
         else if (!V_stricmp(argv[i], "-psdcompresion"))
         {
-            const int iValue = atoi(argv[i]);
+            const int iValue = V_atoi(argv[i]);
 
             // Note: This values need to be in sync with psd::compressionType in PsdCompressionType.h
             if ((iValue >= 0) && (iValue <= 3))
@@ -255,8 +255,8 @@ static void ParseCommandline(int argc, char* argv[])
 
             if (pStrTemp1 && pStrTemp2)
             {
-                V_strcpy(g_szSignature[0], pStrTemp1);
-                V_strcpy(g_szSignature[1], pStrTemp2);
+                V_strcpy_safe(g_szSignature[0], pStrTemp1);
+                V_strcpy_safe(g_szSignature[1], pStrTemp2);
             }
             else
             {
@@ -268,14 +268,11 @@ static void ParseCommandline(int argc, char* argv[])
             if (++i < argc && argv[i][0] != '-')
             {
                 char* pInputPath = argv[i];
-
                 if (!pInputPath)
-                {
                     Error("Error: \'-i\' requires a valid path argument. NULL path\n");
-                }
 
                 g_bIsSingleFile = true;
-                V_strcpy(g_szSingleInputFile, pInputPath);
+                V_strcpy_safe(g_szSingleInputFile, pInputPath);
             }
             else
             {
@@ -287,13 +284,10 @@ static void ParseCommandline(int argc, char* argv[])
             if (++i < argc && argv[i][0] != '-')
             {
                 char* pInputPath = argv[i];
-
                 if (!pInputPath)
-                {
                     Error("Error: \'-dir\' requires a valid path argument. NULL path\n");
-                }
 
-                V_strcpy(g_szGameMaterialSrcDir, pInputPath);
+                V_strcpy_safe(g_szGameMaterialSrcDir, pInputPath);
             }
             else
             {
@@ -307,13 +301,10 @@ static void ParseCommandline(int argc, char* argv[])
             if (++i < argc && argv[i][0] != '-')
             {
                 char* pGamePath = argv[i];
-
                 if (!pGamePath)
-                {
                     Error("Error: \'-game\' requires a valid path argument. NULL path\n");
-                }
 
-                V_strcpy(gamedir, pGamePath);
+                V_strcpy_safe(gamedir, pGamePath);
             }
             else
             {

@@ -83,14 +83,9 @@ FORCEINLINE static bool IsPowerOfTwo(const int n)
 static void CheckExtensionImageFileConvert(const char* pFileName)
 {
 	bool bTemp = false;
-
 	for (const char* pExt : g_rgpAssetConvertList)
-	{
 		if (V_strstr(pFileName, pExt))
-		{
 			bTemp = true;
-		}
-	}
 
 	if (!bTemp)
 	{
@@ -98,9 +93,7 @@ static void CheckExtensionImageFileConvert(const char* pFileName)
 		Warning("Supported extension are:\n");
 
 		for (const char* pExt2 : g_rgpAssetConvertList)
-		{
 			Warning("\t%s\n", pExt2);
-		}
 
 		exit(-1);
 	}
@@ -114,12 +107,9 @@ static void CheckExtensionImageFileConvert(const char* pFileName)
 static void GenerateVtexConfigFile(const char* pFileName)
 {
 	if (!g_bTemplateGeneration)
-	{
 		return;
-	}
 
 	float start = Plat_FloatTime();
-
 	{
 		char* pPsdFile = V_strdup(pFileName);
 		V_StripExtension(pPsdFile, pPsdFile, V_strlen(pPsdFile));
@@ -147,7 +137,7 @@ static void GenerateVtexConfigFile(const char* pFileName)
 		{
 			if (V_strstr(pImageFileName, pEnding))
 			{
-				V_strcpy(szNameEnding, pEnding);
+				V_strcpy_safe(szNameEnding, pEnding);
 				bEndFileName = true;
 				break;
 			}
@@ -175,7 +165,7 @@ static void GenerateVtexConfigFile(const char* pFileName)
 
 	// The path where we expect the template config files to be game/materialsrc/template/template_endname.txt
 	char szSrcTemplateConfigFile[MAX_PATH];
-	V_snprintf(szSrcTemplateConfigFile, sizeof(szSrcTemplateConfigFile), "%s\\%s\\%s%s.txt", g_szGameMaterialSrcDir, TEMAPLATE_COFIG_NAME_BASE, TEMAPLATE_COFIG_NAME_BASE, szNameEnding);
+	V_sprintf_safe(szSrcTemplateConfigFile, "%s\\%s\\%s%s.txt", g_szGameMaterialSrcDir, TEMAPLATE_COFIG_NAME_BASE, TEMAPLATE_COFIG_NAME_BASE, szNameEnding);
 	qprintf("Source template config file:    %s\n", szSrcTemplateConfigFile);
 
 	// Setup the template config to copy.
@@ -197,8 +187,8 @@ static void GenerateVtexConfigFile(const char* pFileName)
 	else
 	{
 		// Copy the config file to the .psd dir!
-		CUtlBuffer utlbuffer;
-		if (!g_pFileSystem->ReadFile(szSrcTemplateConfigFile, NULL, utlbuffer)) 
+		CUtlBuffer* utlbuffer = new CUtlBuffer();
+		if (!g_pFileSystem->ReadFile(szSrcTemplateConfigFile, NULL, *utlbuffer)) 
 		{
 			Warning("Failed to read template file: %s\n"
 					"Skipping vtex template generation!\n", szSrcTemplateConfigFile);
@@ -206,7 +196,7 @@ static void GenerateVtexConfigFile(const char* pFileName)
 			delete[] pImageFileConfig;
 			return;
 		}
-		if(!g_pFileSystem->WriteFile(pImageFileConfig, NULL, utlbuffer))
+		if(!g_pFileSystem->WriteFile(pImageFileConfig, NULL, *utlbuffer))
 		{
 			Warning("Failed to write template file: %s\n"
 					"Skipping vtex template generation!\n", pImageFileConfig);
@@ -214,7 +204,10 @@ static void GenerateVtexConfigFile(const char* pFileName)
 			delete[] pImageFileConfig;
 			return;
 		}
-		
+	
+		// TODO: FIX THIS!!
+		// This causes a memory leak!!
+		// delete utlbuffer;
 		Msg("done(%.2fs)\n", Plat_FloatTime() - start);
 	}
 
@@ -228,7 +221,7 @@ static void GenerateVtexConfigFile(const char* pFileName)
 static bool IsPsdOK(const char* pFileName)
 {
 	char szFile[MAX_PATH];
-	V_snprintf(szFile, sizeof(szFile), "%s.psd", pFileName);
+	V_sprintf_safe(szFile, "%s.psd", pFileName);
 
 	if (_access(szFile, 0))
 	{
@@ -246,21 +239,19 @@ static bool IsPsdOK(const char* pFileName)
 //-----------------------------------------------------------------------------
 // Purpose: Add metadata to the .psd file
 //-----------------------------------------------------------------------------
-static void SetMetaData(psd::ExportDocument* pDocument, psd::MallocAllocator allocator /*TODO: maybe fix this?*/, const char* pFileName)
+static void SetMetaData(psd::ExportDocument* pDocument, psd::MallocAllocator* allocator, const char* pFileName)
 {
 	float start = Plat_FloatTime();
 	char szPsdWriterDateBuild[64];
 
 	Msg("Adding meta data to the .psd file... ");
-
-	V_snprintf(szPsdWriterDateBuild, sizeof(szPsdWriterDateBuild), "Build date: %s %s", __DATE__, __TIME__);
-
-	AddMetaData(pDocument, &allocator, "Auto - generated with psdwriter.exe", szPsdWriterDateBuild);
-	AddMetaData(pDocument, &allocator, "Resolution [x, y]:", ""); // TODO, put here the res!
+	V_sprintf_safe(szPsdWriterDateBuild, "Build date: %s %s", __DATE__, __TIME__);
+	AddMetaData(pDocument, allocator, "Auto - generated with psdwriter.exe", szPsdWriterDateBuild);
+	AddMetaData(pDocument, allocator, "Resolution [x, y]:", ""); // TODO, put here the res!
 
 	if (g_bSignature)
 	{
-		AddMetaData(pDocument, &allocator, g_szSignature[0], g_szSignature[1]);
+		AddMetaData(pDocument, allocator, g_szSignature[0], g_szSignature[1]);
 	}
 
 	Msg("done(%.2fs)\n", Plat_FloatTime() - start);
@@ -280,22 +271,14 @@ static T* AllocVectorImageData(const char* pFileName)
 	qprintf("Allocating image vector data... %s", verbose ? "\n" : "");
 
 	if constexpr (std::is_same<T, uint8_t>::value) 
-	{
 		stb_array = stbi_load(pFileName, &g_iImageWidth, &g_iImageHeight, &g_iChannels, 0);
-	}
 	else if constexpr (std::is_same<T, uint16_t>::value)
-	{
 		stb_array = stbi_load_16(pFileName, &g_iImageWidth, &g_iImageHeight, &g_iChannels, 0);
 
-	}
 	else if constexpr (std::is_same<T, float32_t>::value)
-	{
 		stb_array = stbi_loadf(pFileName, &g_iImageWidth, &g_iImageHeight, &g_iChannels, 0);
-	}
 	else 
-	{
 		static_assert(std::is_same<T, void>::value, "Unsupported type. Use uint8_t, uint16_t or float32_t.");
-	}
 
 	if (stb_array)
 	{
@@ -323,11 +306,8 @@ static T* AllocVectorImageData(const char* pFileName)
 				"This will cause an error in vtex.exe when compiling the texture!\n"
 			   );
 	}
-	
 	delete[] pTemp;
-
 	qprintf("done(%.2fs)\n%s", Plat_FloatTime() - start, verbose ? "\n" : "");
-
 	return stb_array;
 }
 
@@ -358,13 +338,9 @@ static std::vector<T> SeparateRGBALayersFromSTB(const T* CompleteArray, const ps
 
 	int ratio = 0;
 	if (uiChannels == 3) 
-	{
 		ratio = 3;
-	}
 	else if (uiChannels == 4) 
-	{
 		ratio = 4;
-	}
 
 	int iIndex = 0; // default Red.
 	for (const psd::exportChannel::Enum Temp : Channels)
@@ -375,9 +351,7 @@ static std::vector<T> SeparateRGBALayersFromSTB(const T* CompleteArray, const ps
 
 	int iArraySize = g_iImageWidth * g_iImageHeight * uiChannels;
 	for (int i = iIndex; i < iArraySize; i += ratio) 
-	{
 		pTemp.push_back(CompleteArray[i]);
-	}
 
 	return pTemp;
 }
@@ -442,7 +416,7 @@ static void WriteNBitsPsd(const char* pFileName, const char* pLayer1)
 		static_assert(std::is_same<T, void>::value, "Unsupported type. Use uint8_t, uint16_t or float32_t.");
 	}
 
-	SetMetaData(document, allocator, pFileName);
+	SetMetaData(document, &allocator, pFileName);
 
 	// when adding a layer to the document, you first need to get a new index into the layer table.
 	// with a valid index, layers can be updated in parallel, in any order.
@@ -523,22 +497,38 @@ void CheckAndExportToPsd(const char* pFileName)
 	}
 
 	// Default layer name
-	V_strcpy(szLayerName, pImageFileName);
+	V_strcpy_safe(szLayerName, pImageFileName);
 
 	// one more Sanity check, i swear..
 	CheckExtensionImageFileConvert(pFileName);
 	
-	if		(V_strstr(pFileName, g_rgpAssetConvertList[0])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName);   /*.jpg	- 8bits*/ }
-	else if (V_strstr(pFileName, g_rgpAssetConvertList[1])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName);   /*.jpeg - 8bits*/ }
-	else if (V_strstr(pFileName, g_rgpAssetConvertList[2])) { WriteNBitsPsd<uint16_t>(pFileName, szLayerName);  /*.png	- 16bits*/}
-	else if (V_strstr(pFileName, g_rgpAssetConvertList[3])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName);   /*.tga	- 8bits*/ }
-	else if (V_strstr(pFileName, g_rgpAssetConvertList[4])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName);   /*.bmp	- 8bits*/ }
-	else if (V_strstr(pFileName, g_rgpAssetConvertList[5])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName);   /*.gif	- 8bits*/ }
-	else if (V_strstr(pFileName, g_rgpAssetConvertList[6])) { WriteNBitsPsd<float32_t>(pFileName, szLayerName); /*.hdr	- 32bits*/}
-	else if (V_strstr(pFileName, g_rgpAssetConvertList[7])) { WriteNBitsPsd<float32_t>(pFileName, szLayerName); /*.pic	- 32bits*/}
-	else if (V_strstr(pFileName, g_rgpAssetConvertList[8])) { WriteNBitsPsd<uint16_t>(pFileName, szLayerName);  /*.ppm	- 16bits*/}
-	else if (V_strstr(pFileName, g_rgpAssetConvertList[9])) { WriteNBitsPsd<uint16_t>(pFileName, szLayerName);  /*.pgm	- 16bits*/}
-
+	if (g_bDontForce8BitsPsd) 
+	{
+		if (V_strstr(pFileName, g_rgpAssetConvertList[0])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName);   /*.jpg	- 8bits*/ }
+		else if (V_strstr(pFileName, g_rgpAssetConvertList[1])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName);   /*.jpeg - 8bits*/ }
+		else if (V_strstr(pFileName, g_rgpAssetConvertList[2])) { WriteNBitsPsd<uint16_t>(pFileName, szLayerName);  /*.png	- 16bits*/ }
+		else if (V_strstr(pFileName, g_rgpAssetConvertList[3])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName);   /*.tga	- 8bits*/ }
+		else if (V_strstr(pFileName, g_rgpAssetConvertList[4])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName);   /*.bmp	- 8bits*/ }
+		else if (V_strstr(pFileName, g_rgpAssetConvertList[5])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName);   /*.gif	- 8bits*/ }
+		else if (V_strstr(pFileName, g_rgpAssetConvertList[6])) { WriteNBitsPsd<float32_t>(pFileName, szLayerName); /*.hdr	- 32bits*/ }
+		else if (V_strstr(pFileName, g_rgpAssetConvertList[7])) { WriteNBitsPsd<float32_t>(pFileName, szLayerName); /*.pic	- 32bits*/ }
+		else if (V_strstr(pFileName, g_rgpAssetConvertList[8])) { WriteNBitsPsd<uint16_t>(pFileName, szLayerName);  /*.ppm	- 16bits*/ }
+		else if (V_strstr(pFileName, g_rgpAssetConvertList[9])) { WriteNBitsPsd<uint16_t>(pFileName, szLayerName);  /*.pgm	- 16bits*/ }
+	}
+	else
+	{
+		if (V_strstr(pFileName, g_rgpAssetConvertList[0])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName);    }
+		else if (V_strstr(pFileName, g_rgpAssetConvertList[1])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName); }
+		else if (V_strstr(pFileName, g_rgpAssetConvertList[2])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName); }
+		else if (V_strstr(pFileName, g_rgpAssetConvertList[3])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName); }
+		else if (V_strstr(pFileName, g_rgpAssetConvertList[4])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName); }
+		else if (V_strstr(pFileName, g_rgpAssetConvertList[5])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName); }
+		else if (V_strstr(pFileName, g_rgpAssetConvertList[6])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName); }
+		else if (V_strstr(pFileName, g_rgpAssetConvertList[7])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName); }
+		else if (V_strstr(pFileName, g_rgpAssetConvertList[8])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName); }
+		else if (V_strstr(pFileName, g_rgpAssetConvertList[9])) { WriteNBitsPsd<uint8_t>(pFileName, szLayerName); }
+	}
+	
 	// Delete the older source file.
 	if (g_bDeleteSource)
 	{
@@ -554,3 +544,4 @@ void CheckAndExportToPsd(const char* pFileName)
 
 	GenerateVtexConfigFile(pFileName);
 }
+

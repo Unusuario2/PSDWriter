@@ -25,6 +25,7 @@ extern bool			g_bTemplateGeneration;
 extern bool			g_bDeleteSource;
 extern float		g_fGlobalTimer;
 extern uint8_t		g_uiCompressionType;
+extern bool			g_bDontForce8BitsPsd;
 extern uint8_t      g_uiForceImageBit;
 extern char			g_szSignature[1][128];
 extern char			g_szGameMaterialSrcDir[MAX_PATH];
